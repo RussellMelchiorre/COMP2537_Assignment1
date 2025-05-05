@@ -15,7 +15,7 @@ const app = express();
 const Joi = require("joi");
 
 
-const expireTime = 24 * 60 * 60 * 1000; //expires after 1 day  (hours * minutes * seconds * millis)
+const expireTime = 1 * 60 * 60 * 1000; //expires after 1 hour  (hours * minutes * seconds * millis)
 
 /* secret information section */
 const mongodb_host = process.env.MONGODB_HOST;
@@ -45,7 +45,7 @@ app.use(session({
 	store: mongoStore, 
 	saveUninitialized: false, 
 	resave: true,
-  cookie: { maxAge: expireTime }
+  cookie: { maxAge: expireTime }  //-------------------------------
 }
 ));
 
@@ -96,7 +96,7 @@ app.post("/signup", async (req, res) => {
     return res.redirect("/noPass");
   }
 
-  const schema = Joi.object({
+  const schema = Joi.object({ //-------------------------------------------------------------
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().required()
@@ -144,7 +144,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   const schema = Joi.object({
-    email: Joi.string().email().required(),
+    email: Joi.string().email().required(), //---------------------------------------------
     password: Joi.string().required()
   });
 
@@ -232,7 +232,7 @@ app.get("/loginfail", (req, res) => {
 
 // 404 Page
 app.get("*", (req, res) => {
-  res.status(404).send("Page not found");
+  res.status(404).send("ERROR 404 - Page not found :(");
 });
 
 // Start server
