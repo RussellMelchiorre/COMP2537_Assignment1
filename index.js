@@ -1,54 +1,53 @@
 
 require("./utils.js");
-require("dotenv").config();
 
-const express = require("express");
-const session = require("express-session");
-const MongoStore = require("connect-mongo");
-const bcrypt = require("bcrypt");
-const Joi = require("joi");
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const bcrypt = require('bcrypt');
+const saltRounds = 12;
+
+const port = process.env.PORT || 3000;
+
 const app = express();
 
-// App stuff
-const saltRounds = 12;
-const port = process.env.PORT || 3000;
-const expireTime = 1 * 60 * 60 * 1000; // 1 hour
+const Joi = require("joi");
 
+
+const expireTime = 24 * 60 * 60 * 1000; //expires after 1 day  (hours * minutes * seconds * millis)
+
+/* secret information section */
 const mongodb_host = process.env.MONGODB_HOST;
 const mongodb_user = process.env.MONGODB_USER;
 const mongodb_password = process.env.MONGODB_PASSWORD;
 const mongodb_database = process.env.MONGODB_DATABASE;
 const mongodb_session_secret = process.env.MONGODB_SESSION_SECRET;
+
 const node_session_secret = process.env.NODE_SESSION_SECRET;
+/* END secret section */
 
-const { MongoClient } = require("mongodb");
-const database = new MongoClient(
-  `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_database}?retryWrites=true&w=majority`
-);
+var {database} = include('databaseConnection');
 
-let userCollection;
-database.connect().then(() => {
-  const db = database.db(mongodb_database);
-  userCollection = db.collection("users");
-});
+const userCollection = database.db(mongodb_database).collection('users');
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({extended: false}));
 
-app.use(
+var mongoStore = MongoStore.create({
+	mongoUrl: `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/sessions`,
+	crypto: {
+		secret: mongodb_session_secret
+	}
+})
 
-  session({
+app.use(session({ 
     secret: node_session_secret,
-    store: MongoStore.create({
-      mongoUrl: `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_database}?retryWrites=true&w=majority`,
-      crypto: { secret: mongodb_session_secret }
-    }),
-
-
-    saveUninitialized: false,
-    resave: true,
-    cookie: { maxAge: expireTime }
-  })
-);
+	store: mongoStore, 
+	saveUninitialized: false, 
+	resave: true,
+  cookie: { maxAge: expireTime }
+}
+));
 
 app.use(express.static(__dirname + "/public"));
 
@@ -140,7 +139,7 @@ app.get("/login", (req, res) => {
   `);
 });
 
-// Login checker
+// Login processing
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -178,7 +177,7 @@ app.post("/login", async (req, res) => {
   res.redirect("/members");
 });
 
-//Members page
+// Members-only page
 app.get("/members", (req, res) => {
   if (!req.session.authenticated) {
     return res.redirect("/");
