@@ -7,6 +7,8 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const bcrypt = require('bcrypt');
 const saltRounds = 12;
+const { ObjectId } = require("mongodb");
+
 
 const port = process.env.PORT || 3000;
 
@@ -14,7 +16,7 @@ const app = express();
 
 const Joi = require("joi");
 
-
+app.set("view engine", "ejs");
 const expireTime = 1 * 60 * 60 * 1000; //expires after 1 hour  (hours * minutes * seconds * millis)
 
 /* secret information section */
@@ -51,74 +53,60 @@ app.use(session({
 
 app.use(express.static(__dirname + "/public"));
 
-// Home page
-app.get("/", (req, res) => {
-  if (!req.session.authenticated) {
-    res.send(`
-      <h1>Home</h1>
-      <form action="/signup" method="get"><button type="submit">Sign up</button></form><br>
-      <form action="/login" method="get"><button type="submit">Log in</button></form>
-    `);
-  } else {
-    res.send(`
-      <h1>Home</h1>
-      Hello, ${req.session.name}<br>
-      <form action="/members" method="get"><button type="submit">Go to Members Area</button></form><br>
-      <form action="/logout" method="get"><button type="submit">Logout</button></form>
-    `);
-  }
-}); 
 
-// Sign up form
-app.get("/signup", (req, res) => {
-  res.send(`
-    <h1>Sign up</h1>
-    <form action="/signup" method="post">
-      Name: <input name="name" type="text"><br>
-      Email: <input name="email" type="email"><br>
-      Password: <input name="password" type="password"><br>
-      <button type="submit">Sign up</button>
-    </form>
-  `);
+app.get("/", (req, res) => {
+  res.render("index", {
+    authenticated: req.session.authenticated,
+    name: req.session.name
+  });
 });
 
-// Signup checker
+app.get("/signup", (req, res) => {
+  res.render("signup");
+});
+
 app.post("/signup", async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name) {
-    return res.redirect("/noUser");
+    return res.status(400).render("error", {
+      status: 400,
+      message: "a name is required to create an account."
+    });
   }
   if (!email) {
-    return res.redirect("/noEmail");
+    return res.status(400).render("error", {
+      status: 400,
+      message: "a email is required to create an account."
+    });
   }
   if (!password) {
-    return res.redirect("/noPass");
+    return res.status(400).render("error", {
+      status: 400,
+      message: "a password is required to create an account."
+    });
   }
 
-  const schema = Joi.object({ //-------------------------------------------------------------
+  const schema = Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().required()
   });
 
   const validation = schema.validate({ name, email, password });
-  
-  if (validation.error) {
-    const errorType = validation.error.details[0].type;
-    const isInjection = errorType === "string.base" || errorType === "any.invalid";
-    if (isInjection) {
-      return res.send(`
-        <h1 style="color:red;">NoSQL Injection Attempt Detected!</h1>
-        <img src="/intruder.gif" width="300"><br>
-        <form action="/" method="get"><button type="submit">Return to Home</button></form>
-      `);
-    }
-    return res.redirect("/");
+
+  if (validation.error){
+    res.render("index");
   }
 
   const hashedPassword = await bcrypt.hash(password, saltRounds);
-  await userCollection.insertOne({ name, email, password: hashedPassword });
+
+  await userCollection.insertOne({
+    name,
+    email,
+    password: hashedPassword,
+    user_type: "user"
+  });
 
   req.session.authenticated = true;
   req.session.name = name;
@@ -127,47 +115,33 @@ app.post("/signup", async (req, res) => {
   res.redirect("/members");
 });
 
-// Login form
 app.get("/login", (req, res) => {
-  res.send(`
-    <h1>Log in</h1>
-    <form action="/login" method="post">
-      Email: <input name="email" type="email"><br>
-      Password: <input name="password" type="password"><br>
-      <button type="submit">Log in</button>
-    </form>
-  `);
+  res.render("login");
 });
 
-// Login processing
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   const schema = Joi.object({
-    email: Joi.string().email().required(), //---------------------------------------------
+    email: Joi.string().email().required(),
     password: Joi.string().required()
   });
 
   const validation = schema.validate({ email, password });
 
   if (validation.error) {
-
-    const errorType = validation.error.details[0].type;
-    const isInjection = errorType === "string.base" || errorType === "any.invalid";
-
-    if (isInjection) {
-      return res.send(`
-        <h1 style="color:red;">NoSQL Injection Attempt Detected!</h1>
-        <img src="/intruder.gif" width="300"><br>
-        <form action="/" method="get"><button type="submit">Return to Home</button></form>
-      `);
-    }
-    return res.redirect("/loginfail");
+    return res.status(400).render("error", {
+      status: 400,
+      message: "email and password are required."
+    });
   }
 
   const user = await userCollection.findOne({ email: email });
   if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.redirect("/loginfail");
+    return res.status(401).render("error", {
+      status: 401,
+      message: "wrong email or password, try again."
+    });
   }
 
   req.session.authenticated = true;
@@ -177,65 +151,69 @@ app.post("/login", async (req, res) => {
   res.redirect("/members");
 });
 
-// Members-only page
 app.get("/members", (req, res) => {
   if (!req.session.authenticated) {
     return res.redirect("/");
   }
-  const images = ["fashion1.jpg", "fashion2.jpg", "fashion3.jpg"];
-  const randomImage = images[Math.floor(Math.random() * images.length)];
-  res.send(`
-    <h1>Members Area</h1>
-    Welcome, ${req.session.name}!<br>
-    <img src="/${randomImage}" width="300"><br>
-    <form action="/logout" method="get"><button type="submit">Logout</button></form>
-  `);
-}); 
 
-// Logout
+  res.render("members", { name: req.session.name });
+});
+
+app.get("/admin", async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.redirect("/login");
+  }
+
+  const currentUser = await userCollection.findOne({ email: req.session.email });
+
+  if (!currentUser || currentUser.user_type !== "admin") {
+    return res.status(403).render("error", {
+      status: 403,
+      message: "you are not authorized, please use an admin account"
+    });
+  }
+
+  const users = await userCollection.find({}).toArray();
+  res.render("admin", {
+    users: users,
+    user: currentUser
+  });
+
+});
+
+app.get("/promote/:id", async (req, res) => {
+  const id = req.params.id;
+  await userCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { user_type: "admin" } }
+  );
+
+  res.redirect("/admin");
+});
+
+app.get("/demote/:id", async (req, res) => {
+  const id = req.params.id;
+  await userCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { user_type: "user" } }
+  );
+
+  res.redirect("/admin");
+});
+
 app.get("/logout", (req, res) => {
   req.session.destroy(err => {
-    if (err) console.log("Session destroy error:", err);
     res.redirect("/");
   });
 });
 
-// Error pages
-app.get("/noEmail", (req, res) => {
-  res.send(`
-    <h1>Email Required</h1>
-    <p>Please provide an email address</p>
-    <form action="/signup" method="get"><button type="submit">Back</button></form>
-  `);
-});
-app.get("/noUser", (req, res) => {
-  res.send(`
-    <h1>Name Required</h1>
-    <p>Please provide a name</p>
-    <form action="/signup" method="get"><button type="submit">Back</button></form>
-  `);
-});
-app.get("/noPass", (req, res) => {
-  res.send(`
-    <h1>Password Required</h1>
-    <p>Please provide a password</p>
-    <form action="/signup" method="get"><button type="submit">Back</button></form>
-  `);
-});
-app.get("/loginfail", (req, res) => {
-  res.send(`
-    <h1>Login Failed</h1>
-    <p>User and password not found.</p>
-    <form action="/login" method="get"><button type="submit">Back</button></form>
-  `);
+app.use((req, res) => {
+  res.status(404).render("error", {
+    status: 404,
+    message: "Page not found."
+  });
 });
 
-// 404 Page
-app.get("*", (req, res) => {
-  res.status(404).send("ERROR 404 - Page not found :(");
-});
-
-// Start server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });

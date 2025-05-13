@@ -1,0 +1,9 @@
+<%- include("templates/header") %>
+
+<h1 class="text-danger"><%= status%> Error</h1>
+
+<p><%= message || "Something went wrong." %></p>
+
+<a href="/" class="btn btn-primary">Back to Home</a>
+
+<%- include("templates/footer") %>

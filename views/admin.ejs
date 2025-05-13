@@ -1,0 +1,30 @@
+<%- include("templates/header") %>
+
+<h2 class="mb-4">Admin Dashboard</h2>
+
+<table class="table align-middle">
+  <thead class="table-dark">
+    <tr>
+      <th>username</th>
+      <th>email</th>
+      <th>user perms</th>
+      <th>promote/demote</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (let i = 0; i < users.length; i++) { %>
+      <%- include("templates/user", { 
+        u: users[i],       
+        user: user        
+      }) %>
+    <% } %>
+  </tbody>
+  
+</table>
+
+<div class="mt-4">
+  <a href="/" class="btn btn-secondary">Back to Home</a>
+  <a href="/logout" class="btn btn-secondary">Logout</a>
+</div>
+
+<%- include("templates/footer") %>
