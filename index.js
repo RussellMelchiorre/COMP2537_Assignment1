@@ -152,7 +152,7 @@ app.post("/login", async (req, res) => {
 });
 
 app.get("/members", (req, res) => {
-  if (!req.session.authenticated) {
+  if (!req.session.authenticated) { //--------------------------------------------------------------------------------------------------------------------------------------
     return res.redirect("/");
   }
 
@@ -166,7 +166,7 @@ app.get("/admin", async (req, res) => {
 
   const currentUser = await userCollection.findOne({ email: req.session.email });
 
-  if (!currentUser || currentUser.user_type !== "admin") {
+  if (currentUser.user_type !== "admin") { //------------------------------------------------------------------------------------------------------------------------------
     return res.status(403).render("error", {
       status: 403,
       message: "you are not authorized, please use an admin account"
